@@ -1,5 +1,7 @@
 # Chatbot dùng tư vấn và dự đoán chỉ số chứng khoán
 
+<img src="doc/thumb_main_screen.png" alt="Main screenshot"/>
+
 ## Project setup
 ```
 yarn install
