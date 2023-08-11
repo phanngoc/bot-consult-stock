@@ -105,6 +105,12 @@ functionsStock = [
 from vnstock import *
 from db import *
 
+def fm_date(date):
+    return date.strftime("%Y-%m-%d")
+
+def fm_float(number):
+    return "{:.2f}".format(number)
+
 def trim_words(sentence, num_word=200):
     # Split the sentence into words
     words = sentence.split()
@@ -134,7 +140,7 @@ def compare_stock(stock_key):
     print('compare_stock:res:', res)
     return res
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import algorithm.rnn as stockRnn
 
 # Get list of dates for the last 365 days
@@ -143,7 +149,7 @@ def get_last_days(num_days):
     days_ago = current_date - timedelta(days=num_days)
     date_list = [days_ago + timedelta(days=i) for i in range(num_days)]
     # Format the dates as "%Y-%m-%d" and store them in a new list
-    formatted_dates = [date.strftime("%Y-%m-%d") for date in date_list]
+    formatted_dates = [fm_date(date) for date in date_list]
 
     return formatted_dates
 
@@ -156,21 +162,37 @@ def get_predict_price(code, num_days=1):
     rnn = stockRnn.TrainRnn()
     rnn.fit(data_train)
     # stock last 10 days for predict.
+    date_train_test = df_his.iloc[:, 0:1].values
+    date_train_test = date_train_test[len(date_train_test) - 10:].tolist()
+    # Convert the 2D array back to the original list of datetime.date objects
+    date_train_test = [date_array[0] for date_array in date_train_test]
     data_train_care = data_train[len(data_train) - 10:].tolist()
+    
+    response = []
+    for k, date in enumerate(date_train_test):
+        response.append({'date': fm_date(date), 'price': fm_float(data_train_care[k][0]), 'is_predict': False})
+    
     data_test = [data_train_care]
     pred_result = rnn.predict(data_test)
-    predict_price = [float(pred_result[0][0])]
-    
+    one_day = timedelta(days=1)
+    new_day_predict = date_train_test[len(date_train_test)-1] + one_day
+    date_train_test.append(new_day_predict)
+    response.append({'date': fm_date(new_day_predict), 'price': fm_float(pred_result[0][0]), 'is_predict': True})
+
     while num_days > 1:
         data_test[0] = data_test[0][1:]
         data_test[0].append(pred_result[0])
-        print('data_test', data_test)
         pred_result = rnn.predict(data_test)
-        predict_price.append(float(pred_result[0][0]))
+        # add date predict.
+        one_day = timedelta(days=1)
+        new_day_predict = date_train_test[len(date_train_test)-1] + one_day
+        date_train_test.append(new_day_predict)
+        print('new_day_predict', date_train_test[len(date_train_test)-1], new_day_predict)
+        response.append({'date': fm_date(new_day_predict), 'price': fm_float(pred_result[0][0]), 'is_predict': True})
         num_days = num_days - 1
     
-    print('predict_price', predict_price)
-    return predict_price
+    print('response:', response)
+    return response
 
 def predict_stock(args):
     print('predict_stock', args)
@@ -181,10 +203,10 @@ def predict_stock(args):
     messages = []
     data = []
     for code in stock_codes:
-        predict_price = get_predict_price(code, num_days)        
-        predict_price_str = ','.join(str(e) for e in predict_price)
+        response_stock_price = get_predict_price(code, num_days)
+        data.append({'code': code, 'data': response_stock_price})   
+        predict_price_str = ','.join(str(e['price']) for e in response_stock_price if e['is_predict'])
         print('predict_price_str', predict_price_str)
-        data.append({"code": code, "predict_price": predict_price})
         prompt = "Dự đoán giá cổ phiếu " + code + " là: " + predict_price_str + ".\n"
         messages.append(prompt)
 
@@ -192,7 +214,8 @@ def predict_stock(args):
         'status': 1,
         'type': 'du_doan',
         'message': ','.join(messages),
-        'data': data,        
+        'data': data,
+        'isChart': True,
     }
 
 def get_stock_key(params):

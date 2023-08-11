@@ -7,11 +7,20 @@
           <div class="text-message">
             {{ message.message }}
           </div>
+          <div class="chart" v-if="!message.isUser && message.isChart">
+            <Line
+              :id="'line-id-' + index"
+              :height="300"
+              :width="600"
+              :options="chartOptions"
+              :data="dataChart(message)"
+            />
+          </div>
         </div>
       </div>
-      
       <div id="loading-bar-spinner" class="spinner" v-if="isLoading">
-        <div class="spinner-icon"></div></div>
+        <div class="spinner-icon"></div>
+      </div>
 
     </div>
     <div class="chat-input">
@@ -21,6 +30,13 @@
 </template>
 
 <script>
+
+import { Line } from 'vue-chartjs'
+import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement,
+  LineElement } from 'chart.js'
+
+ChartJS.register(Title, Tooltip, Legend, LineElement, BarElement, CategoryScale, LinearScale, PointElement)
+
 import axios from 'axios';
 
 const API_URL = 'http://127.0.0.1:5000/api/send-message';
@@ -43,14 +59,52 @@ export default {
   props: {
     msg: String
   },
+  components: {
+    Line,
+  },
   data() {
     return {
       isLoading: false,
       messages: [],
       userInput: '',
+      chartData: {
+        labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July'],
+        datasets: [
+          {
+            label: 'Data One',
+            backgroundColor: '#f87979',
+            data: [40, 39, 10, 40, 39, 80, 40]
+          }
+        ],
+      },
+      chartOptions: {
+        responsive: false,
+        maintainAspectRatio: false
+      },
     };
   },
+  computed: {
+
+  },
   methods: {
+    dataChart: function(message) {
+      let stocks = message.data
+      let datasets = []
+      let labels = stocks[0].data.map(item => item.date)
+      stocks.forEach(stockData => {
+        let data = stockData.data.map(item => item.price)
+        datasets.push({
+          label: stockData.code,
+          backgroundColor: '#f87979',
+          data: data
+        })
+      });
+      
+      return {
+        labels: labels,
+        datasets: datasets,
+      }
+    },
     async sendMessage() {
       const userMessage = this.userInput;
       this.messages.push({ message: userMessage, isUser: true });
@@ -99,6 +153,9 @@ export default {
   height: 100%; */
 }
 .chat-messages {
+  --tw-bg-opacity: 1;
+  background-color: rgba(247,247,248,var(--tw-bg-opacity));
+  overflow-y: scroll;
   margin-bottom: 10px;
   flex: auto;
 }
@@ -109,6 +166,11 @@ export default {
   margin: 10px;
   border-radius: 8px;
   border-radius: 2px;
+  .chart{
+    display: block;
+    width: 700px;
+    height: 400px;
+  }
 }
 .user-message {
   text-align: right;
@@ -125,6 +187,9 @@ export default {
   justify-content: center;
   flex: none;
   .input-box {
+    --tw-shadow: 0 0 15px rgba(0,0,0,.1);
+    --tw-shadow-colored: 0 0 15px var(--tw-shadow-color);
+    box-shadow: var(--tw-ring-offset-shadow,0 0 transparent),var(--tw-ring-shadow,0 0 transparent),var(--tw-shadow);
     height: 60px;
     /* padding: 10px; */
     border: 1px solid #ccc;
