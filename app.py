@@ -78,7 +78,7 @@ def generate_message(messages, user_message, functions=None):
 
 functionsStock = [
     {
-        "name": "get_stock_key",
+        "name": "forward_action",
         "description": "Lấy mã stock từ message",
         "parameters": {
             "type": "object",
@@ -110,6 +110,9 @@ def fm_date(date):
 
 def fm_float(number):
     return "{:.2f}".format(number)
+
+def fm_stock_code(code):
+    return code.replace(" ", "")
 
 def trim_words(sentence, num_word=200):
     # Split the sentence into words
@@ -198,10 +201,10 @@ def predict_stock(args):
     print('predict_stock', args)
     stock_key = args['stock_key']
     num_days = args.get('num_days', 1)
-    # Get the current date
-    stock_codes = stock_key.split(",")
+    stock_codes = list(map(fm_stock_code, stock_key.split(",")))
     messages = []
     data = []
+    print('stock_codes', stock_codes)
     for code in stock_codes:
         response_stock_price = get_predict_price(code, num_days)
         data.append({'code': code, 'data': response_stock_price})   
@@ -218,7 +221,7 @@ def predict_stock(args):
         'isChart': True,
     }
 
-def get_stock_key(params):
+def forward_action(params):
     action = params["action"]
     
     if action is not None:

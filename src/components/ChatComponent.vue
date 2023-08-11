@@ -19,7 +19,11 @@
         </div>
       </div>
       <div id="loading-bar-spinner" class="spinner" v-if="isLoading">
-        <div class="spinner-icon"></div>
+        <div class="load-3">
+          <div class="line"></div>
+          <div class="line"></div>
+          <div class="line"></div>
+        </div>
       </div>
 
     </div>
@@ -122,27 +126,42 @@ export default {
 
 <style scoped>
 
-#loading-bar-spinner.spinner {
-    left: 50%;
-    position: absolute;
-    z-index: 19 !important;
-    animation: loading-bar-spinner 400ms linear infinite;
+@keyframes loadingC {
+  0 {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(0, 15px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
 }
 
-#loading-bar-spinner.spinner .spinner-icon {
-    width: 40px;
-    height: 40px;
-    border:  solid 4px transparent;
-    border-top-color:  #00C8B1 !important;
-    border-left-color: #00C8B1 !important;
-    border-radius: 50%;
-}
+#loading-bar-spinner {
+  display: flex;
+  flex-direction: column;
+  .load-3{
+    align-self: center;
+  }
+  .line {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border-radius: 15px;
+    background-color: #4b9cdb;
+  }
 
-@keyframes loading-bar-spinner {
-  0%   { transform: rotate(0deg);   transform: rotate(0deg); }
-  100% { transform: rotate(360deg); transform: rotate(360deg); }
+  .load-3 .line:nth-last-child(1) {
+    animation: loadingC 0.6s 0.1s linear infinite;
+  }
+  .load-3 .line:nth-last-child(2) {
+    animation: loadingC 0.6s 0.2s linear infinite;
+  }
+  .load-3 .line:nth-last-child(3) {
+    animation: loadingC 0.6s 0.3s linear infinite;
+  }
 }
-
 
 .chat-container {
   display: flex;
