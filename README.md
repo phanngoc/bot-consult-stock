@@ -34,4 +34,9 @@ và ổn định nhất cho người dùng.
 
 Reference:
 - https://github.com/openai/openai-cookbook/blob/c651bfdda64ac049747c2a174cde1c946e2baf1d/examples/How_to_call_functions_with_chat_models.ipynb
-- 
+
+
+## Roadmap
+- Predict bài viết đó thuộc về stock nào 
+    + Giá bất động sản tăng cao => VIC: 0.9, PDR: 0.95, NVL: 1.0, TCH: 0.8
+    + ....
