@@ -8,9 +8,7 @@ import json
 
 from dotenv import load_dotenv
 import os
-
 load_dotenv()
-
 apiKey = os.getenv('OPENAI_API_KEY')
 
 app = Flask(__name__)
@@ -160,7 +158,27 @@ def get_last_days(num_days):
 
 import numpy as np
 
-def get_predict_price(code, num_days=1):
+
+class StockFactory:
+    def __init__(self, code, model='rnn', num_days=1):
+        self.code = code
+        self.model = model
+        self.num_days = num_days
+
+    def get_code(self):
+        return self.code
+
+    def predict(self):
+        if self.model == 'rnn':
+            get_predict_price(self.code, self.num_days)
+
+    def train(self):
+        return self.data_test
+
+    def get_date_train_test(self):
+        return self.date_train_test
+
+def predict_price_rnn(code, num_days=1):
     dates_train = get_last_days(365)
     df_his = stock_historical_data(code, dates_train[0], dates_train[len(dates_train) - 1], '1D', 'stock')
     data_train = df_his.iloc[:, 1:2].values
@@ -208,7 +226,7 @@ def predict_stock(args):
     data = []
     print('stock_codes', stock_codes)
     for code in stock_codes:
-        response_stock_price = get_predict_price(code, num_days)
+        response_stock_price = predict_price_rnn(code, num_days)
         data.append({'code': code, 'data': response_stock_price})   
         predict_price_str = ','.join(str(e['price']) for e in response_stock_price if e['is_predict'])
         print('predict_price_str', predict_price_str)
