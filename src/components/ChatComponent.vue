@@ -141,6 +141,7 @@ export default {
 #loading-bar-spinner {
   display: flex;
   flex-direction: column;
+  padding-bottom: 5px;
   .load-3{
     align-self: center;
   }

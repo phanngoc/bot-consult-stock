@@ -1,4 +1,6 @@
+from email import message
 from altair import param
+from exceptiongroup import catch
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import openai
@@ -6,9 +8,7 @@ import json
 
 from dotenv import load_dotenv
 import os
-
 load_dotenv()
-
 apiKey = os.getenv('OPENAI_API_KEY')
 
 app = Flask(__name__)
@@ -51,10 +51,14 @@ def execute_function_call(message):
     return results
 
 
-def establish_context(system_message, user_message, functions=None):
-    messages = []
-    messages.append({"role": "system", "content": system_message})
+def establish_context(system_message, user_message, functions=None, messages=[],
+                      user_id='test_user'):
+    if len(messages) == 0:
+        messages.append({"role": "system", "content": system_message})
+        Message.create(user_id=user_id, role='system', message=system_message, message_gpt=system_message)
+
     messages.append({"role": "user", "content": user_message})
+    Message.create(user_id=user_id, role='user', message=user_message, message_gpt=user_message)
     chat_response = chat_completion_request(messages, functions)
     print('chat_response', chat_response.json())
     assistant_message = chat_response.json()["choices"][0]["message"]
@@ -62,19 +66,10 @@ def establish_context(system_message, user_message, functions=None):
     if assistant_message.get("function_call"):
         results = execute_function_call(assistant_message)
         messages.append({"role": "function", "name": assistant_message["function_call"]["name"], "content": results})
+        Message.create(user_id=user_id, role='user', message=results, message_gpt=results.get('message'))
 
     return messages
 
-def generate_message(messages, user_message, functions=None):
-    messages.append({"role": "user", "content": user_message})
-    chat_response = chat_completion_request(messages, functions)
-    assistant_message = chat_response.json()["choices"][0]["message"]
-    messages.append(assistant_message)
-    if assistant_message.get("function_call"):
-        results = execute_function_call(assistant_message)
-        messages.append({"role": "function", "name": assistant_message["function_call"]["name"], "content": results})
-
-    return messages
 
 functionsStock = [
     {
@@ -95,6 +90,11 @@ functionsStock = [
                 "num_days": {
                     "type": "integer",
                     "description": "Số ngày dự đoán",
+                },
+                "model": {
+                    "type": "string",
+                    "enum": ["rnn", "linear"],
+                    "description": "Mô hình dự đoán",
                 }
             },
             "required": ["location", "format"],
@@ -158,7 +158,27 @@ def get_last_days(num_days):
 
 import numpy as np
 
-def get_predict_price(code, num_days=1):
+
+class StockFactory:
+    def __init__(self, code, model='rnn', num_days=1):
+        self.code = code
+        self.model = model
+        self.num_days = num_days
+
+    def get_code(self):
+        return self.code
+
+    def predict(self):
+        if self.model == 'rnn':
+            get_predict_price(self.code, self.num_days)
+
+    def train(self):
+        return self.data_test
+
+    def get_date_train_test(self):
+        return self.date_train_test
+
+def predict_price_rnn(code, num_days=1):
     dates_train = get_last_days(365)
     df_his = stock_historical_data(code, dates_train[0], dates_train[len(dates_train) - 1], '1D', 'stock')
     data_train = df_his.iloc[:, 1:2].values
@@ -206,7 +226,7 @@ def predict_stock(args):
     data = []
     print('stock_codes', stock_codes)
     for code in stock_codes:
-        response_stock_price = get_predict_price(code, num_days)
+        response_stock_price = predict_price_rnn(code, num_days)
         data.append({'code': code, 'data': response_stock_price})   
         predict_price_str = ','.join(str(e['price']) for e in response_stock_price if e['is_predict'])
         print('predict_price_str', predict_price_str)
@@ -242,21 +262,43 @@ def forward_action(params):
 def index():
     return render_template("index.html")
 
+role_valid = ['system', 'user', 'assistant', 'function']
+
 @app.route("/api/send-message", methods=["POST"])
 def sendMessage():
     # Get the message from the POST request
     messageUser = request.json.get("prompt")
+    user_id = request.json.get("user_id") if request.json.get("user_id") else 'test_user'
+    thread_id = request.json.get("thread_id") if request.json.get("thread_id") else 'test_thread'
+    print('user_id', user_id)
+    try:
+        queryDicts = Message.select().where(Message.user_id == user_id).order_by(Message.id.desc()).dicts()
+        messages = [message for message in queryDicts]
+        print('messages_intry', messages)
+    except Exception as e:
+        print('e', e)
+        messages = []
 
-    # save message into database
-    Message.create(user_id='test_user', role='user', message=messageUser)
+    print('messages:', messages)
+    def getRawMessage(message):
+        response = {}
+        if message['role'] is not None:
+            response['role'] = message['role']
+        if message['name'] is not None:
+            response['name'] = message['name']
+        if message['message_gpt'] is not None:
+            response['content'] = message['message_gpt']           
 
+        return response
+
+    messagesOpenAI = list(map(getRawMessage, messages))
 
     messages = establish_context("Trả lời câu hỏi của người dùng về tình trạng các mã stock ?",
-        messageUser, functionsStock)
+        messageUser, functionsStock, messages=messagesOpenAI, user_id=user_id)
     # get last message from messages
     messageLast = messages[len(messages) - 1]
     content = messageLast['content']
-    Message.create(user_id='test_user', role='function', message=content)
+    
     content['isUser'] = False
     print('messageLast:content', content)
 
