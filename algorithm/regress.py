@@ -23,12 +23,16 @@ from keras.layers import Dense, Dropout, Activation, Lambda, Embedding, LSTM, Si
 from keras.preprocessing.text import Tokenizer
 
 class TfidfTransform:
+    data_origin = None
     def __init__(self):
+        print('init tfidf', self.data_origin)
+        self.vectorizer = TfidfVectorizer(min_df=0.01, max_df=0.9, max_features = 200000, ngram_range = (1, 1))
+        if self.data_origin is not None:
+            self.vectorizer.fit(self.data_origin)
         pass
 
     def fit_transform(self, data):
         self.data_origin = data
-        self.vectorizer = TfidfVectorizer(min_df=0.01, max_df=0.9, max_features = 200000, ngram_range = (1, 1))
         advancedtrain = self.vectorizer.fit_transform(data)
         self.data_transformed = advancedtrain.toarray()
         return self.data_transformed
@@ -40,6 +44,12 @@ class TfidfTransform:
     
     def inverse_transform(self, data):
         return self.vectorizer.inverse_transform(data)
+    
+    def save_model(self, path):
+        joblib.dump(self.vectorizer, path)
+
+    def load_model(self, path):
+        self.vectorizer = joblib.load(path)
     
 class PhobertTransform:
     max_len = 300
@@ -112,48 +122,13 @@ class SequenceTransform:
         return self.vectorizer.inverse_transform(data)
 
 
-
-# class Regressor:
-#     def __init__(self) -> None:
-#         pass
-
-#     def create_model(self, algorithm = 'svr'):
-#         self.algorithm = algorithm
-#         if self.algorithm == 'svr':
-#             self.regressor = SVR(kernel='rbf', C=100, gamma=0.1, epsilon=.1)
-#         elif self.algorithm == 'linear':
-#             self.regressor = LinearRegression()
-#         elif self.algorithm == 'randomforest':
-#             self.regressor = RandomForestRegressor(n_estimators=100, random_state=42)
-#         elif self.algorithm == 'nbsvm':
-#             self.regressor = LinearSVC(C=0.01)
-#         elif self.algorithm == 'logistic':
-#             self.regressor = GradientBoostingClassifier()
-#         elif self.algorithm == 'mlp':
-#             print('mlp', self.x_train.shape, self.y_train.shape)
-#             self.y_train = np.expand_dims(self.y_train, axis=1)
-    
-#             self.regressor = Sequential()
-#             self.regressor.add(LSTM(units = 50,return_sequences = True, input_shape = (self.x_train.shape[1],1)))
-#             self.regressor.add(Dropout(0.2))
-#             self.regressor.add(LSTM(units = 50,return_sequences = True))
-#             self.regressor.add(Dropout(0.2))
-#             self.regressor.add(LSTM(units = 50,return_sequences = True))
-#             self.regressor.add(Dropout(0.2))
-#             self.regressor.add(LSTM(units = 50))
-#             self.regressor.add(Dropout(0.2))
-
-#             self.regressor.add(Dense(units = 1))
-
-#     def fit(self, x_train, y_train):
-#         if self.algorithm == 'mlp':
-#             self.regressor.fit(self.x_train, self.y_train, epochs=10, batch_size=32, validation_split=0.2)
-#         else:
-#             self.regressor.fit(x_train, y_train)
-
+import os
+import joblib
 
 class RegressionTextToPrice:
     max_len = 300
+    path_cached = './cached/'
+
     def __init__(self, transform_type='phobert', algorithm='svr'):
         self.transform_type = transform_type
         self.algorithm = algorithm
@@ -165,7 +140,10 @@ class RegressionTextToPrice:
         elif self.transform_type == 'sequence':
             self.transformer = SequenceTransform()
 
-    def fit(self, x_train, y_train):
+    def fit(self, x_train, y_train, cache=False):
+        if cache and self.load_model():
+            print('load cache')
+            return
         self.x_train_raw = np.array(x_train) if isNumpy(x_train) else x_train
         self.y_train_raw = np.array(y_train) if isNumpy(y_train) else y_train
         self.x_train = self.transformer.fit_transform(self.x_train_raw)
@@ -205,12 +183,47 @@ class RegressionTextToPrice:
             return
 
         self.regressor.fit(self.x_train, self.y_train)  # ravel y_train to convert to 1D array
+        self.save_model() if cache else None
 
-    def save_model(self, path):
-        self.regressor.save(path)
+    def get_path_cached(self, type='model'):
+        if type == 'model':
+            path = f"{self.path_cached}regressor_{self.algorithm}.model"
+        elif type == 'transformer':
+            path = f"{self.path_cached}transformer_{self.transform_type}.bin"
+        return path
 
-    def load_pretrained(self, path):
-        self.regressor = load_model(path)
+    def type_model(self):
+        if self.algorithm == 'mlp':
+            return 'keras'
+        else:
+            return 'sklearn'
+
+    def save_model(self):
+        type = self.type_model()
+        path_model_cached = self.get_path_cached('model')
+        if type == 'sklearn':
+            joblib.dump(self.regressor, path_model_cached)
+        elif type == 'keras':
+            self.regressor.save(path_model_cached)
+
+        path_transform_cached = self.get_path_cached('transformer')
+        self.transformer.save_model(path_transform_cached)
+
+    def load_model(self):
+        type = self.type_model()
+        path_model_cached = self.get_path_cached('model')
+        path_transform_cached = self.get_path_cached('transformer')
+        if (not os.path.exists(path_model_cached) or not os.path.exists(path_transform_cached)):
+            return False
+
+        if type == 'sklearn':
+            self.regressor = joblib.load(path_model_cached)
+        elif type == 'keras':
+            self.regressor = load_model(path_model_cached)
+
+        path_transform_cached = self.get_path_cached('transformer')
+        self.transformer.load_model(path_transform_cached)
+        return True
 
     def predict(self, x_test):
         x_test = self.transformer.transform(x_test)
@@ -225,40 +238,7 @@ class RegressionTextToPrice:
         trimmed_sentence = " ".join(words[:num_word])
         return trimmed_sentence
 
-    
+
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.svm import LinearSVC
-
-class RegressionStock:
-    def __init__(self):
-        pass
-
-    def use_regression(self, model_type='linear'):
-        if model_type == 'linear':
-            self.regressor = LinearRegression()
-        elif model_type == 'logistic':
-            self.regressor = LogisticRegression()
-        elif model_type == 'randomforest':
-            self.regressor = RandomForestRegressor(n_estimators=100, random_state=42)
-        elif model_type == 'nbsvm':
-            self.regressor = LinearSVC(C=0.01)
-
-    def fit(self, x_train, y_train):
-        if isinstance(x_train, np.ndarray) and isinstance(y_train, np.ndarray):
-            self.x_train = x_train
-            self.y_train = y_train
-        else:
-            self.x_train, self.y_train = np.array(self.x_train), np.array(self.y_train)
-
-        self.train()
-
-    def train(self):
-        self.regressor.fit(self.x_train, self.y_train)
-    
-    def tranform_to_predict(self, data):
-        return data
-
-    def predict(self, data):
-        result = self.regressor.predict(data)
-        return result
