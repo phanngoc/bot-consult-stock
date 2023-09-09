@@ -36,7 +36,7 @@ mydb.close()
 
 def create_article(item, is_update=False):
     query = CrawlData.select().where(CrawlData.url == item['url'])
-    print('create_article', item['url'], len(query))
+
     if (len(query) > 0):
         itemDB = query[0]
         if is_update:
@@ -47,10 +47,12 @@ def create_article(item, is_update=False):
             if 'date' in item:
                 itemDB.date = item['date']
             itemDB.save()
+            print('create_article:update', item['url'])
             return itemDB
         else:
             return False
 
+    print('create_article', item['url'], len(query))
     data = CrawlData(
         domain = item['domain'],
         title = item['title'],
@@ -237,18 +239,26 @@ def create_driver():
 class CrawlVietStock:
     limit_page = 20
     driver = None
+    driver2 = None
     links = []
     titles = []
     retry_backup = False
     source = "https://vietstock.vn/chung-khoan.htm"
     base_url = "https://vietstock.vn"
 
-    def __init__(self, driver = None, limit_page = 20) -> None:
+    def __init__(self, driver = None, driver2 = None, limit_page = 20) -> None:
         print('CrawlVietStock::__init__', driver, limit_page)
         if driver is None:
             print('create_driver')
             self.driver = create_driver()
-        self.driver = driver
+        else:
+            self.driver = driver
+
+        if driver2 is None:
+            self.driver2 = create_driver()
+        else:
+            self.driver2 = driver2
+
         print('create_driver::driver:', self.driver)
         self.limit_page = limit_page
         self.csv_writer = CSVWriter('backup_title_url.csv', fieldnames=["title", "url"])
@@ -259,9 +269,8 @@ class CrawlVietStock:
         return len(query) > 0
 
     """
-    daily: True if you want to crawl only page not exist in database
-    retry_backup: True if you want to retry from backup file (link, title)
-    fresh_start: True if you want to truncate backup file and start from beginning
+        daily: True if you want to crawl only page not exist in database
+        fresh_start: True if you want to truncate backup file and start from beginning
     """
     def run(self, range_date = {'start_date': None, 'end_date': None},
             daily = False, retry_backup = False,
@@ -271,8 +280,7 @@ class CrawlVietStock:
         self.driver.get(self.source)
         if fresh_start:
             self.csv_writer.truncate_file()
-
-        if retry_backup:
+        else:
             url_backup = pd.read_csv('backup_title_url.csv')
             self.links = url_backup['url'].tolist()
             self.titles = url_backup['title'].tolist()
@@ -288,6 +296,8 @@ class CrawlVietStock:
             self.driver.execute_script("$('.AddStockCode').remove();")
             self.driver.execute_script("$('div.trending-fixed').remove();")
             self.driver.find_element(By.CSS_SELECTOR, '.range_inputs .applyBtn').click()
+
+        isBreakLoopList = False
 
         while True:
             headings_a = self.driver.find_elements(By.CSS_SELECTOR, "#channel-container .single_post_text h4 a")
@@ -308,14 +318,19 @@ class CrawlVietStock:
                     })
 
                     if daily and self.exist_record(link_detail):
-                        self.get_page_detail()
-                        return False
+                        isBreakLoopList = True
+                        break
+                    else:
+                        self.saveContentPage(link_detail, title, not daily)
 
                     self.links.append(link_detail)
                     self.titles.append(title)
                 except Exception as e:
                     print('run:e:', e)
                     continue
+
+            if isBreakLoopList:
+                break
 
             # turn off popup trending
             btnTrending = self.driver.find_elements(By.CSS_SELECTOR, '#button-trending')
@@ -336,30 +351,27 @@ class CrawlVietStock:
                 break
             page += 1
 
-    def get_page_detail(self):
-        for key, link_detail in enumerate(self.links):
-            try:
-                print('get_page_detail', key, link_detail)
-                self.driver.get(link_detail)
-                contentElem = self.driver.find_element(By.CSS_SELECTOR, '.single_post_heading')
-                content = contentElem.text
-                dateElem = self.driver.find_element(By.CSS_SELECTOR, '.blog-single-head .date')
+    def saveContentPage(self, url, title, isUpdate = False):
+        self.driver2.get(url)
+        contentElem = self.driver2.find_element(By.CSS_SELECTOR, '.single_post_heading')
+        content = contentElem.text
+        dateElem = self.driver2.find_element(By.CSS_SELECTOR, '.blog-single-head .date')
 
-                datePublish = None
-                if dateElem:
-                    date = dateElem.text
-                    datePublish = dateparser.parse(date)
-                
-                crawl.create_article({
-                    'domain': 'https://vietstock.vn/chung-khoan.htm',
-                    'title': self.titles[key],
-                    'url': link_detail,
-                    'date': datePublish,
-                    'content': content,
-                }, True)
-            except Exception as e:
-                print('get_page_detail:e:', e)
-                continue
+        datePublish = None
+        if dateElem:
+            date = dateElem.text
+            datePublish = dateparser.parse(date, date_formats=['%d/%m/%Y %H:%M'])
+            print('datePublish', date, datePublish)
+        
+        result = crawl.create_article({
+            'domain': 'https://vietstock.vn/chung-khoan.htm',
+            'title': title,
+            'url': url,
+            'date': datePublish,
+            'content': content,
+        }, isUpdate)
+
+        return result
 
 
 class CrawlCafeF:
