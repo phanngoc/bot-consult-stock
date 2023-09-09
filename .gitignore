@@ -10,6 +10,7 @@ node_modules
 
 # python cache files
 /__pycache__
+/algorithm/__pycache__
 
 # Log files
 npm-debug.log*
@@ -28,3 +29,4 @@ pnpm-debug.log*
 backup_title_url.csv
 data.csv
 algorithm/data_TPB_title.csv
+algorithm/cached

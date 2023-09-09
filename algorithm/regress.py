@@ -14,26 +14,35 @@ from pickle import load
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVR
 from sklearn.metrics import mean_squared_error
-from helper import isNumpy
+from helper import isNumpy, NLP
 from transformers import AutoModel, AutoTokenizer
 from keras.preprocessing import sequence
 from keras.utils import np_utils
 from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Activation, Lambda, Embedding, LSTM, SimpleRNN, GRU, Input, Bidirectional
 from keras.preprocessing.text import Tokenizer
+import pandas as pd
 
 class TfidfTransform:
     data_origin = None
     def __init__(self):
         print('init tfidf', self.data_origin)
-        self.vectorizer = TfidfVectorizer(min_df=0.01, max_df=0.9, max_features = 200000, ngram_range = (1, 1))
+        self.vectorizer = TfidfVectorizer(min_df=0.01, max_df=0.9, max_features = 2000000, ngram_range = (1, 1))
         if self.data_origin is not None:
             self.vectorizer.fit(self.data_origin)
         pass
 
     def fit_transform(self, data):
+        dataSeris = pd.Series(data)
+        # data = data.astype(str)
+        # data[np.isnan(data)] = ''
+        data = dataSeris.fillna('').astype(str)
         self.data_origin = data
-        advancedtrain = self.vectorizer.fit_transform(data)
+        try:
+            advancedtrain = self.vectorizer.fit_transform(data)
+        except Exception as e:
+            print('e', e)
+            return None
         self.data_transformed = advancedtrain.toarray()
         return self.data_transformed
 
@@ -53,6 +62,8 @@ class TfidfTransform:
     
 class PhobertTransform:
     max_len = 300
+    data_transformed = None
+
     def __init__(self, type_extract='mean'):
         self.type_extract = type_extract
         self.model = AutoModel.from_pretrained("vinai/phobert-base-v2")
@@ -79,6 +90,12 @@ class PhobertTransform:
         self.data_transformed = np.array(embeddingArr)
         return self.data_transformed
     
+    def save_model(self, path):
+        joblib.dump(self.data_transformed, path)
+
+    def load_model(self, path):
+        self.data_transformed = joblib.load(path)
+
     def transform(self, data):
         return self.fit_transform(data)
 
@@ -122,16 +139,29 @@ class SequenceTransform:
         return self.vectorizer.inverse_transform(data)
 
 
+def clear_text_vi(texts = []):
+    clear_ld = lambda t: NLP(t).get_string_sanitize()
+    vec_fn = np.vectorize(clear_ld)
+    return vec_fn(texts)
+    
 import os
 import joblib
 
 class RegressionTextToPrice:
     max_len = 300
     path_cached = './cached/'
+    valid_algorithm = ['randomforest', 'svr', 'linear', 'nbsvm', 'logistic', 'mlp']
+    valid_transform_type = ['phobert', 'tfidf', 'sequence']
 
     def __init__(self, transform_type='phobert', algorithm='svr'):
         self.transform_type = transform_type
         self.algorithm = algorithm
+
+        if self.algorithm not in self.valid_algorithm:
+            raise Exception('algorithm not valid. Valid param is:', self.valid_algorithm)
+
+        if self.transform_type not in self.valid_transform_type:
+            raise Exception('transform_type not valid. Valid param is:', self.valid_transform_type)
 
         if self.transform_type == 'phobert':
             self.transformer = PhobertTransform()
@@ -146,6 +176,9 @@ class RegressionTextToPrice:
             return
         self.x_train_raw = np.array(x_train) if isNumpy(x_train) else x_train
         self.y_train_raw = np.array(y_train) if isNumpy(y_train) else y_train
+
+        self.x_train_raw = clear_text_vi(self.x_train_raw)
+
         self.x_train = self.transformer.fit_transform(self.x_train_raw)
         self.y_train = self.y_train_raw
         
