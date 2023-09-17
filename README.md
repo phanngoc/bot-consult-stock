@@ -39,12 +39,17 @@ và ổn định nhất cho người dùng.
 Reference:
 - https://github.com/openai/openai-cookbook/blob/c651bfdda64ac049747c2a174cde1c946e2baf1d/examples/How_to_call_functions_with_chat_models.ipynb
 
+# Crawl tin tức hằng ngày.
+Hiện tại đã hỗ trợ crawl được 3 trang tin tức là cafef, vietstoc, thanhnien.
 
 ## Run cho crawl daily:
 - Run notebook crawl_daily.ipynb (crawl toàn bộ dữ liệu cho tới khi trùng 1 cái trong DB (dùng url để làm indentity check)).
   
-### Crawl vietstock:
+### Vietstock: option nâng cao.
 - Tạo driver cho selenium rồi truyền vào class CrawlVietStock:
+
+daily: Crawl dữ liệu hằng ngày, sẽ dừng khi gặp 1 record đã được crawl trước đó rồi, có tồn tại trong DB.
+fresh_start: crawl lại từ đầu, không dùng dữ liệu backup.
 
 ```
 import crawl

@@ -6,6 +6,8 @@ def isNumpy(x):
 
 from pyvi import ViTokenizer, ViPosTagger
 from underthesea import word_tokenize
+import pandas as pd
+import re
 
 class NLP():
     COMMON_WORD_PATH = 'data/cmword.csv'
@@ -35,7 +37,7 @@ class NLP():
     def split_words(self):
         text = self.segmentation()
         try:
-            t = [x.strip('0123456789%@$.,=+-!;/()*"&^:#|\n\t\' ').lower() for x in text.split()]
+            t = [str(x.strip('0123456789%@$.,=+-!;/()*"&^:#|\n\t\' ').lower()) for x in text.split()]
             filtered_list = [item for item in t if item != ""]
             return filtered_list
         except TypeError:
@@ -50,7 +52,7 @@ class NLP():
         return ' '.join(words)
 
     def remove_common_word(self):
-        pf_cm_words = pd.read_csv(COMMON_WORD_PATH)
+        pf_cm_words = pd.read_csv(self.COMMON_WORD_PATH)
         pf_cm_words.columns = ['regex', 'rep']
         rep = pd.Series(pf_cm_words.rep.values,index=pf_cm_words.regex.values).to_dict()
         pattern = re.compile("|".join(rep.keys()))

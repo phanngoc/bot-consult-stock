@@ -213,6 +213,11 @@ from math import e
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.wait import WebDriverWait
+
 from time import sleep
 import dateparser
 import os
@@ -228,13 +233,6 @@ def create_driver():
     driver = webdriver.Chrome(options=options)
     return driver
 
-# driver = create_driver()
-
-# class Crawl:
-#     csv_writer = None
-#     def __init__(self, csv_backup = {'file_path': None}) -> None:
-#         self.csv_writer = CSVWriter(csv_backup['file_path'], fieldnames=["title", "url"])
-#         pass
 
 class CrawlVietStock:
     limit_page = 20
@@ -353,6 +351,12 @@ class CrawlVietStock:
 
     def saveContentPage(self, url, title, isUpdate = False):
         self.driver2.get(url)
+        try:
+            WebDriverWait(self.driver2, 5).until(EC.presence_of_element_located((By.CLASS_NAME, 'article-content')))
+        except Exception as e:
+            print('saveContentPage:e:', e)
+            return False
+
         contentElem = self.driver2.find_element(By.CSS_SELECTOR, '.single_post_heading')
         content = contentElem.text
         dateElem = self.driver2.find_element(By.CSS_SELECTOR, '.blog-single-head .date')
