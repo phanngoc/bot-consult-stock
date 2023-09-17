@@ -34,8 +34,6 @@ class TfidfTransform:
 
     def fit_transform(self, data):
         dataSeris = pd.Series(data)
-        # data = data.astype(str)
-        # data[np.isnan(data)] = ''
         data = dataSeris.fillna('').astype(str)
         self.data_origin = data
         try:
@@ -137,6 +135,12 @@ class SequenceTransform:
     
     def inverse_transform(self, data):
         return self.vectorizer.inverse_transform(data)
+    
+    def save_model(self, path):
+        joblib.dump(self.tokenizer, path)
+
+    def load_model(self, path):
+        self.tokenizer = joblib.load(path)
 
 
 def clear_text_vi(texts = []):
