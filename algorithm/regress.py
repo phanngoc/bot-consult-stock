@@ -196,7 +196,7 @@ class RegressionTextToPrice:
             self.regressor = LinearSVC(C=0.01)
         elif self.algorithm == 'logistic':
             self.regressor = GradientBoostingClassifier()
-        elif self.algorithm == 'mlp':
+        elif self.algorithm == 'mlp': # @TODO algorithm == 'mlp' not work in current. Need to fix
             print('mlp', self.x_train.shape, self.y_train.shape)
             self.y_train = np.expand_dims(self.y_train, axis=1)
             self.scaler = MinMaxScaler(feature_range = (0,1))

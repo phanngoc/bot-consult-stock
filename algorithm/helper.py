@@ -5,7 +5,7 @@ def isNumpy(x):
 
 
 from pyvi import ViTokenizer, ViPosTagger
-from underthesea import word_tokenize
+from underthesea import sent_tokenize, word_tokenize
 import pandas as pd
 import re
 
@@ -40,6 +40,13 @@ class NLP():
             t = [str(x.strip('0123456789%@$.,=+-!;/()*"&^:#|\n\t\' ').lower()) for x in text.split()]
             filtered_list = [item for item in t if item != ""]
             return filtered_list
+        except TypeError:
+            return []
+
+    def split_sentences(self):
+        sents = sent_tokenize(self.text)
+        try:
+            return sents
         except TypeError:
             return []
 

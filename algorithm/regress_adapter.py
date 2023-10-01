@@ -5,7 +5,12 @@ import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 import mysql.connector
 from vnstock import *
 
-def get_news_date(date_start, date_end):
+def get_news_date(date_start, date_end = None):
+
+    # check exist date_end or get current date
+    if date_end is None:
+        date_end = datetime.now().strftime('%Y-%m-%d')
+
     # Establish a connection to the MySQL database
     connection = mysql.connector.connect(
         host='127.0.0.1',
@@ -18,7 +23,7 @@ def get_news_date(date_start, date_end):
     # Read the table data using pandas
     query = f"""
         SELECT title, content, date FROM crawl_data
-        where date >= '{date_start}' and date <= '{date_end}'
+        where DATE(date) >= '{date_start}' and DATE(date) <= '{date_end}'
     """
     df = pd.read_sql(query, connection)
     return df
@@ -31,13 +36,37 @@ def get_data(stock, date_start, date_end, export_url=None):
     df['text'] = df['title'] + df['content']
     df['date_only'] = pd.to_datetime(df['date'], format='%Y-%m-%d %H:%M:%S').dt.strftime('%Y-%m-%d')
 
-
     df_his = stock_historical_data(stock, date_start, date_end, "1D", 'stock')
     df_his['date'] = pd.to_datetime(df_his['time']).dt.strftime('%Y-%m-%d')
 
-
     dfMerge = pd.merge(df, df_his, left_on=['date_only'], right_on=['date'], how='inner')
     dfSumarize = dfMerge[['text', 'close', 'date_y']]
+
+    # Sorting the DataFrame by the 'date_column' in ascending order
+
+    df_sorted = dfSumarize.sort_values(by='date_y', ascending=True)
+    if export_url:
+        df_sorted.to_csv(export_url, index=True)
+
+    return df_sorted
+
+def get_data_tendency(stock, date_start, date_end, export_url=None):
+    df = get_news_date(date_start, date_end)
+    # Concatenate columns A and B vertically
+    df['text'] = df['title'] + df['content']
+    df['date_only'] = pd.to_datetime(df['date'], format='%Y-%m-%d %H:%M:%S').dt.strftime('%Y-%m-%d')
+
+    df_his = stock_historical_data(stock, date_start, date_end, "1D", 'stock')
+
+    df_his['date'] = pd.to_datetime(df_his['time']).dt.strftime('%Y-%m-%d')
+    df_his = df_his.sort_values(by='date', ascending=True)
+    # Calculate the percentage increase and store it in a new column
+    df_his['percentage_increase'] = df_his['close'].pct_change() * 100
+    # Drop the first row since it doesn't have a previous date for comparison
+    df_his = df_his.dropna()
+
+    dfMerge = pd.merge(df, df_his, left_on=['date_only'], right_on=['date'], how='inner')
+    dfSumarize = dfMerge[['text', 'percentage_increase', 'date_y']]
 
     # Sorting the DataFrame by the 'date_column' in ascending order
 
