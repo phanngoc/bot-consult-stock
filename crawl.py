@@ -1,3 +1,4 @@
+from exceptiongroup import catch
 import mysql.connector
 from datetime import datetime
 import json
@@ -22,11 +23,11 @@ class BaseModel(Model):
 class CrawlData(BaseModel):
     class Meta:
         table_name = 'crawl_data'
-    domain = TextField()
-    title = TextField()
-    url = TextField()
-    content = TextField(default=None)
-    date = DateTimeField(default=None)
+    domain = TextField(null=True)
+    title = TextField(null=True)
+    url = TextField(null=True)
+    content = TextField(default=None, null=True)
+    date = DateTimeField(default=None, null=True)
     created_at = DateTimeField(default=datetime.datetime.now)
 
 
@@ -101,7 +102,6 @@ class CrawlThanhNien:
         response = self.get_response(url, params)
         if response.status_code // 100 == 2:
             content_html = response.content
-            print('content_html', content_html[:100])
             # Parse the HTML using BeautifulSoup
             soup = BeautifulSoup(content_html, 'html.parser')
             # Find the title element
@@ -145,11 +145,10 @@ class CrawlThanhNien:
                 link = title_element['href']
 
                 print("Title:", title)
-                # print("Content:", content)
                 print("Link:", link)
 
                 data_detail = self.get_page_detail(link, {})
-                print('data_detail', data_detail)
+
                 item = {
                     'domain': 'https://thanhnien.vn/kinh-te.htm',
                     'title': title,
@@ -169,14 +168,15 @@ class CrawlThanhNien:
             print(f"Request failed with status code {response.status_code}: {response.reason}")
             return False
 
-    def run(self, page = None, daily = False):
+    def run(self, page = {"from": None, "to": None}, daily = False):
         self.daily = daily
-        self.page = 1 if page is None else page
+        page_from = 1 if page['from'] is None else page['from']
+        page_to = -1 if page['to'] is None else page['to']
         while (True):
-            isSuccess = self.crawl_html('https://thanhnien.vn/timelinelist/18549/' + str(self.page) + '.htm', {})
-            if isSuccess == False:
+            isSuccess = self.crawl_html('https://thanhnien.vn/timelinelist/18549/' + str(page_from) + '.htm', {})
+            if isSuccess == False or page_to == page_from:
                 break
-            self.page += 1
+            page_from += 1
 
 # obj = CrawlThanhNien()
 # obj.run()
@@ -234,6 +234,7 @@ def create_driver():
     options = Options()
     options.add_argument("--window-size=1920,1200")
     options.add_argument('--no-sandbox')
+    options.add_argument('--headless')
 
     driver = webdriver.Chrome(options=options)
     return driver
@@ -506,32 +507,36 @@ class VnexpressCrawler():
             url = self.base_url + url
 
         print('get_page_detail', url, params)
-        response = self.get_response(url, params)
-        if response.status_code // 100 == 2:
-            content_html = response.content
-            soup = BeautifulSoup(content_html, 'html.parser')
-            # Find the title element
-            publishdate_elem = soup.select_one('.header-content span.date')
-            if publishdate_elem:
-                publishDate = publishdate_elem.get_text()
-                publishDate = publishDate.strip()
-                publishDate = dateparser.parse(publishDate)
+        try:
+            response = self.get_response(url, params)
+            if response.status_code // 100 == 2:
+                content_html = response.content
+                soup = BeautifulSoup(content_html, 'html.parser')
+                # Find the title element
+                publishdate_elem = soup.select_one('.header-content span.date')
+                if publishdate_elem:
+                    publishDate = publishdate_elem.get_text()
+                    publishDate = publishDate.strip()
+                    publishDate = dateparser.parse(publishDate)
+                else:
+                    publishDate = None
+
+                content_detail_elem = soup.select_one('article.fck_detail')
+
+                content_detail = ''
+                if content_detail_elem:
+                    content_detail = content_detail_elem.get_text()
+
+                return {
+                    'date': publishDate,
+                    'content': content_detail
+                }            
             else:
-                publishDate = None
-
-            content_detail_elem = soup.select_one('article.fck_detail')
-
-            content_detail = ''
-            if content_detail_elem:
-                content_detail = content_detail_elem.get_text()
-
-            return {
-                'date': publishDate,
-                'content': content_detail
-            }
-        else:
-            # If unsuccessful, print the status code and reason for failure
-            print(f"Request failed with status code {response.status_code}: {response.reason}")
+                # If unsuccessful, print the status code and reason for failure
+                print(f"Request failed with status code {response.status_code}: {response.reason}")
+                return {}
+        except Exception as e:
+            print('get_page_detail:e:', e)
             return {}
 
     def crawl_html(self, url, params = {}):
